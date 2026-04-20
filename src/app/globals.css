@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@theme {
+  --color-earth-50: #f1f8f3;
+  --color-earth-100: #dff0e4;
+  --color-earth-200: #bfe0ca;
+  --color-earth-300: #93c9a7;
+  --color-earth-400: #62a97e;
+  --color-earth-500: #428d61;
+  --color-earth-600: #30704b;
+  --color-earth-700: #27593c;
+  --color-earth-800: #214732;
+  --color-earth-900: #1b3a2a;
+  --color-earth-950: #0e2017;
+
+  --color-accent-sun: #fbd38d;
+  --color-accent-flora: #90cea1;
+  
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --font-logo: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: var(--color-earth-50);
+    color: var(--color-earth-900);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    @apply font-sans;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white/70 backdrop-blur-xl border border-white/40 shadow-xl shadow-earth-900/5 rounded-3xl overflow-hidden;
+  }
+  
+  .btn-primary {
+    @apply bg-earth-600 text-white px-8 py-3 rounded-full text-lg font-medium hover:bg-earth-500 hover:shadow-lg hover:shadow-earth-600/30 transition-all duration-300 ease-out active:scale-[0.98] outline-none focus:ring-4 focus:ring-earth-300/50 flex items-center justify-center gap-2;
+  }
+
+  .btn-outline {
+    @apply bg-transparent text-earth-700 border border-earth-300 px-6 py-2.5 rounded-full font-medium hover:bg-earth-100 hover:border-earth-400 transition-all duration-300 ease-out active:scale-[0.98] outline-none;
+  }
+  
+  .glow-leaf {
+    @apply absolute -z-10 rounded-full blur-[100px] bg-gradient-to-tr from-earth-400 to-accent-flora opacity-30;
+    animation: pulse 8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+@layer utilities {
+  .animate-pulse-slow {
+    animation: pulse 8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+    100% { transform: translateY(0px); }
+  }
+}
