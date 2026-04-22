@@ -25,14 +25,13 @@ const scanSchema: Schema = {
       items: {
         type: SchemaType.OBJECT,
         properties: {
-          id: { type: SchemaType.STRING, description: "Unique UUID" },
-          activity: { type: SchemaType.STRING, description: "Specific name of the activity, e.g. 'Uber Ride to SFO'" },
-          category: { type: SchemaType.STRING, description: "One of: Travel, Food, Shopping" },
-          co2_kg: { type: SchemaType.NUMBER, description: "Estimated kg of CO2" },
-          confidence: { type: SchemaType.NUMBER, description: "Decimal from 0.0 to 1.0 showing AI confidence" },
-          spend_amount: { type: SchemaType.STRING, description: "The original transaction cost exactly as found in text, e.g. '$14.99' or '£102'" },
-          receipt_date: { type: SchemaType.STRING, description: "Chronological date of the receipt, e.g. 'April 14, 2026' or 'Not Found'" },
-          date: { type: SchemaType.STRING, description: "Legacy date key (leave empty)" },
+          id: { type: SchemaType.STRING },
+          activity: { type: SchemaType.STRING },
+          category: { type: SchemaType.STRING },
+          co2_kg: { type: SchemaType.NUMBER },
+          confidence: { type: SchemaType.NUMBER },
+          spend_amount: { type: SchemaType.STRING },
+          receipt_date: { type: SchemaType.STRING },
         },
       },
     },
@@ -40,28 +39,36 @@ const scanSchema: Schema = {
   required: ["total_co2", "breakdown", "receipts", "ai_nudge"],
 };
 
+interface Receipt {
+  activity: string;
+  category: string;
+  co2_kg: number;
+  confidence: number;
+  spend_amount?: string;
+  receipt_date?: string;
+  id?: string;
+}
+
 export async function POST() {
   try {
     const session = await auth0.getSession();
+    
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const googleTokens = undefined; 
+    const googleTokens = session.accessToken;
     let rawInboxText = '';
 
     if (googleTokens) {
-      const oauth2Client = new google.auth.OAuth2(
-        process.env.AUTH0_CLIENT_ID || '',
-        process.env.AUTH0_CLIENT_SECRET || ''
-      );
+      const oauth2Client = new google.auth.OAuth2();
       oauth2Client.setCredentials({ access_token: googleTokens as string });
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
       const response = await gmail.users.messages.list({
         userId: 'me',
         maxResults: 10,
-        q: 'subject:receipt OR subject:order OR subject:flight OR subject:booking'
+        q: 'subject:(receipt OR order OR flight OR booking OR "ticket")'
       });
 
       const messages = response.data.messages || [];
@@ -69,18 +76,28 @@ export async function POST() {
 
       for (const msg of messages) {
         if (msg.id) {
-          const detail = await gmail.users.messages.get({ userId: 'me', id: msg.id });
-          emailContents.push(detail.data.snippet || '');
+          const detail = await gmail.users.messages.get({ userId: 'me', id: msg.id, format: 'full' });
+          const parts = detail.data.payload?.parts || [];
+          let body = detail.data.snippet || '';
+
+          const textPart = parts.find(p => p.mimeType === 'text/plain');
+          if (textPart?.body?.data) {
+             body = Buffer.from(textPart.body.data, 'base64').toString();
+          }
+
+          emailContents.push(`--- EMAIL START ---\n${body}\n--- EMAIL END ---`);
         }
       }
-
       rawInboxText = emailContents.join('\n\n');
-    } else {
-      rawInboxText = `
-        User: ${session.user.name || session.user.email}
-        Recent Activities to simulate based on typical Earth Day hacking profiles: 
-        Generate 3 to 5 realistic email receipts that this user might have received in the last 7 days. Include 1 flight or ride, 1 food order, and 1 shopping purchase. CRITICAL: Every single receipt must include a realistic financial cost string (e.g. "Total: $34.50" or "$450.00") so the parsing schema securely captures 'spend_amount'.
-      `;
+    }
+
+    if (!rawInboxText || rawInboxText.trim() === '') {
+      return NextResponse.json({ 
+        total_co2: 0,
+        ai_nudge: "No recent receipts found. Once you travel or shop, your CarbonTrace will update!",
+        breakdown: { Travel: 0, Food: 0, Shopping: 0 },
+        receipts: []
+      }, { status: 200 });
     }
 
     const model = genAI.getGenerativeModel({
@@ -88,19 +105,16 @@ export async function POST() {
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: scanSchema,
-        temperature: 0.7,
+        temperature: 0.1,
       },
-      systemInstruction: "You are the CarbonTrace AI agent. Extract activities from the user's inbox text, estimate realistic kg CO2 values for each, and sum them. Return strictly following the output schema.",
+      systemInstruction: "You are CarbonTrace AI. Extract purchase data from emails. Calculate kg CO2 based on merchant and items. For Lagos/Nigerian merchants, assume 0.4kg CO2 per kWh. Return valid JSON.",
     });
 
-    const prompt = `Analyze the following user inbox data and calculate the carbon footprint:\n${rawInboxText}`;
-    
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const payload = JSON.parse(text);
+    const result = await model.generateContent(rawInboxText);
+    const payload = JSON.parse(result.response.text());
 
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('mock')) {
-      const dbRows = payload.receipts.map((receipt: any) => ({
+      const dbRows = payload.receipts.map((receipt: Receipt) => ({
         user_email: session.user.email,
         activity: receipt.activity,
         category: receipt.category,
@@ -113,8 +127,7 @@ export async function POST() {
       const { error: dbError } = await supabase.from('carbon_logs').insert(dbRows);
       
       if (dbError) {
-        console.error("Supabase Error during insert:", dbError);
-        throw new Error(`Supabase RLS Error: ${dbError.message}`);
+        console.error("Supabase Error:", dbError);
       }
     }
 
@@ -125,4 +138,3 @@ export async function POST() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-

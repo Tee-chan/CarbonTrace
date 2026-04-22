@@ -6,7 +6,7 @@ CarbonTrace automatically tracks your carbon footprint by scanning your Gmail in
 
 ## Live Demo
 
-🔗 [carbontrace.vercel.app](https://carbontrace.vercel.app)
+🔗 [carbontrace.vercel.app](https://carbontrace-red.vercel.app)
 
 ---
 

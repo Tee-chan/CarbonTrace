@@ -19,7 +19,7 @@ type ScanResult = {
   ai_nudge: string;
 };
 
-export default function DashboardClient({ user, initialData }: { user: any, initialData?: ScanResult | null }) {
+export default function DashboardClient({ user, initialData }: { user: { email: string; name?: string }, initialData?: ScanResult | null }) {
   const [isScanning, setIsScanning] = useState(false);
   const [scanData, setScanData] = useState<ScanResult | null>(initialData || null);
   const [error, setError] = useState('');
@@ -49,8 +49,12 @@ export default function DashboardClient({ user, initialData }: { user: any, init
           ai_nudge: data.ai_nudge || prev.ai_nudge
         };
       });
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during scanning.');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An error occurred during scanning.');
+      }
     } finally {
       setIsScanning(false);
     }
@@ -179,7 +183,7 @@ export default function DashboardClient({ user, initialData }: { user: any, init
                   Analyzing Inbox...
                 </>
               ) : (
-                'Scan my emails'
+                'Scan my email'
               )}
             </button>
             <p className="text-[11px] text-earth-400 mt-4 uppercase tracking-widest">Read-Only Permission</p>
